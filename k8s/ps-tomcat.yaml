@@ -1,0 +1,50 @@
+# Sample deployment for Part 4 (Kubernetes): our Tomcat image with 2 replicas + a NodePort Service.
+# Apply:  kubectl apply -f k8s/ps-tomcat.yaml
+# Image:  loaded into minikube with `minikube image load ps-tomcat:1.0`
+#         (or change it to <dockerhub-user>/ps-tomcat:1.0 to pull from Docker Hub)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ps-tomcat
+  labels:
+    app: ps-tomcat
+spec:
+  replicas: 2                      # Kubernetes keeps 2 pods running at all times
+  selector:
+    matchLabels:
+      app: ps-tomcat
+  template:                        # the pod template: what every replica looks like
+    metadata:
+      labels:
+        app: ps-tomcat
+    spec:
+      containers:
+        - name: tomcat
+          image: ps-tomcat:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits:   { cpu: 500m, memory: 512Mi }
+          readinessProbe:          # only send traffic once the app answers
+            httpGet: { path: /ps-app/, port: 8080 }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:           # restart the container if it stops answering
+            httpGet: { path: /ps-app/, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ps-tomcat
+spec:
+  type: NodePort                   # reachable on <node-ip>:30080 from outside the cluster
+  selector:
+    app: ps-tomcat                 # load-balances over all pods with this label
+  ports:
+    - port: 80
+      targetPort: 8080
+      nodePort: 30080

@@ -1,0 +1,15 @@
+# Linux lab VM
+# Creates an Ubuntu 22.04 VM in VirtualBox.
+Vagrant.configure("2") do |config|
+  config.vm.box      = "bento/ubuntu-22.04"
+  config.vm.hostname = "postgres02"
+
+  # Guest MySQL port 3306 -> host 13306 (used to prove the firewall rule works)
+  config.vm.network "forwarded_port", guest: 3306, host: 13306, protocol: "tcp"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name   = "ps-linux-lab"
+    vb.memory = 2048
+    vb.cpus   = 1
+  end
+end

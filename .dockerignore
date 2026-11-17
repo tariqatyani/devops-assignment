@@ -1,0 +1,3 @@
+# Only the sample app goes into Docker build contexts (keeps the PDF and notes out of images)
+*
+!app/

@@ -1,0 +1,29 @@
+# Tomcat VM
+# Ubuntu 24.04 + Java 8 + Apache Tomcat 9 on port 7070 + Nginx reverse proxy on port 80 (ps-app.local)
+#
+#   vagrant up                 # create + provision
+#   vagrant provision          # re-run provision.sh (safe to repeat)
+#   vagrant destroy -f         # delete the VM
+Vagrant.configure("2") do |config|
+  config.vm.box      = "bento/ubuntu-24.04"            # requirement 1: input image
+  config.vm.hostname = "ps-tomcat"
+
+  # Requirement 2: guest port 7070 (Tomcat) -> host port 9090  => http://localhost:9090/
+  config.vm.network "forwarded_port", guest: 7070, host: 9090, protocol: "tcp"
+
+  # Host-only network so the host can reach Nginx on port 80 by name:
+  # add "192.168.56.10  ps-app.local" to the host's hosts file, then open http://ps-app.local/
+  config.vm.network "private_network", ip: "192.168.56.10"
+
+  # Source of the sample web app (built into a WAR inside the VM - no binaries in the repo)
+  config.vm.synced_folder "../app", "/opt/ps-src"
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.name   = "ps-tomcat"
+    vb.memory = 2048                                    # requirement 3: 2 GB RAM
+    vb.cpus   = 2
+  end
+
+  # Requirement 4: install Java 8 + Tomcat 9 (and Nginx, the WAR, the DNS name)
+  config.vm.provision "shell", path: "provision.sh"
+end

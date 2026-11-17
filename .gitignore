@@ -1,0 +1,7 @@
+*.pdf
+.vagrant/
+*.box
+ssh.cfg
+*.log
+NOTES.md
+SCREENSHOTS.md
