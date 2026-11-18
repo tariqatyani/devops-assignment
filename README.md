@@ -16,3 +16,5 @@ from this repo. No VM images or binaries are stored here; the sample WAR is buil
 
 Tested with: Docker 29.1, Oracle Database Free 23ai, PostgreSQL 16, Nginx 1.27, Tomcat 9.0.124,
 OpenJDK 8u512, minikube 1.39 (Kubernetes 1.37), Vagrant + VirtualBox 7.2.
+
+**Setup:** Windows 11 host with VirtualBox + Vagrant (Ubuntu 22.04 and 24.04 VMs for the Linux and Tomcat parts), and a Parrot OS VM for Docker, Oracle, minikube and Git.
