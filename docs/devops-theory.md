@@ -1,231 +1,165 @@
-# DevOps – theory notes
+# DevOps notes
 
-## Docker
-**What it is:** a tool that packages an app together with everything it needs (runtime, libraries,
-config) into an **image**, and runs that image as an isolated process called a **container**.
-Containers share the host's Linux kernel, so they start in seconds and use far less RAM than VMs.
-Isolation comes from kernel features: **namespaces** (each container sees its own processes, network
-and files) and **cgroups** (limits on CPU and RAM).
+Notes for the DevOps reading questions: Docker, Kubernetes, Git and the key concepts.
+
+## What Docker is, use cases and basic commands
+
+Docker packages an application together with everything it needs (runtime, libraries and settings) into an image, and runs that image as a container. Containers share the Linux kernel of the host, so they start in seconds and use much less memory than VMs. Each container is isolated using kernel features: namespaces (its own processes, network and files) and cgroups (CPU and memory limits).
 
 | | Virtual machine | Container |
 |---|---|---|
-| Contains | Whole OS + kernel | App + libraries only |
-| Size / start | GBs / minutes | MBs / seconds |
+| Contains | A full OS with its own kernel | The app and its libraries only |
+| Size and start time | GBs, minutes | MBs, seconds |
 | Isolation | Strong (hypervisor) | Process level (shared kernel) |
 
-**Key words:**
-- **Dockerfile** – the recipe for an image.
-- **Image** – a read-only template built from layers.
-- **Container** – a running instance of an image.
-- **Registry** – the store for images (Docker Hub, GitHub GHCR, AWS ECR, Harbor).
-- **Volume** – data that outlives the container.
-- **Network** – containers on the same user-defined network find each other by name.
+Main terms:
 
-**Use cases:**
-- "works on my machine" problems go away
-- the same image runs in dev, test and prod
-- microservices
-- CI/CD pipelines
-- quick test environments (I ran Oracle, PostgreSQL and Nginx in minutes)
-- packaging legacy apps
+- **Dockerfile:** the instructions to build an image.
+- **Image:** a read-only template built in layers.
+- **Container:** a running instance of an image.
+- **Registry:** where images are stored, such as Docker Hub.
+- **Volume:** data that stays when the container is removed.
 
-**Basic commands:**
+Use cases: the same image runs the same way in development, testing and production, microservices, CI/CD pipelines, and quick test environments (I ran Oracle, PostgreSQL and Nginx in minutes for this assignment).
+
+Basic commands:
+
 ```bash
-docker build -t user/app:1.0 .        # build an image from a Dockerfile
-docker images                         # list images
-docker run -d --name web -p 8080:80 nginx   # start a container in the background, publish a port
-docker ps / docker ps -a              # running / all containers
-docker logs -f web                    # container output
-docker exec -it web sh                # shell inside a running container
-docker stop web / docker start web / docker rm web
-docker pull nginx / docker push user/app:1.0
-docker login                          # log in to a registry
-docker volume ls / docker network ls
-docker compose up -d                  # start several containers from docker-compose.yml
+docker build -t user/app:1.0 .           # build an image
+docker images                            # list images
+docker run -d --name web -p 8080:80 nginx   # run a container in the background
+docker ps        /  docker ps -a         # running / all containers
+docker logs -f web                       # container output
+docker exec -it web sh                   # open a shell inside a container
+docker stop web  /  docker start web  /  docker rm web
+docker pull nginx  /  docker push user/app:1.0
+docker login
+docker compose up -d                     # start several containers from a compose file
 ```
-**My Dockerfile** uses a *multi-stage build*. Stage 1 (a JDK image) packages the WAR. Stage 2 is
-`tomcat:9` and copies in only the WAR, so build tools don't end up in the final image.
 
-## Kubernetes
-**What it is:** a container **orchestrator**. You describe *what you want* in YAML (desired state):
-"3 replicas of this image, reachable on port 80". Kubernetes keeps it that way: it places pods on
-nodes, restarts crashed containers, replaces pods when a node dies, scales, and does rolling updates.
+## What is Kubernetes?
+
+Kubernetes is a container orchestrator. You describe what you want in a YAML file, for example "2 copies of this image, reachable on port 80", and Kubernetes keeps it that way. It decides which node runs each pod, restarts containers that crash, replaces pods if a node goes down, scales up and down, and does rolling updates.
 
 Main objects:
-- **Pod** – the smallest unit: one or more containers that share an IP.
-- **Deployment** – manages identical pods through a ReplicaSet and handles updates/rollbacks.
-- **Service** – a stable IP/DNS name that load-balances over pods. Types: ClusterIP, NodePort, LoadBalancer.
-- **Ingress** – HTTP routing by host/path.
-- **ConfigMap / Secret** – configuration and passwords.
-- **Namespace** – a separate group of objects inside one cluster.
 
-### Master (control plane) vs worker nodes
-- **Control plane (master)** – the *brain*. It decides what runs where but normally doesn't run your apps:
-  - `kube-apiserver` – the front door; `kubectl` and every other component talk to it
-  - `etcd` – a key-value database that stores the whole cluster state
-  - `kube-scheduler` – picks a node for each new pod
-  - `kube-controller-manager` – control loops that keep actual state = desired state (e.g. replica count)
-  - `cloud-controller-manager` – talks to the cloud provider (load balancers, disks)
-- **Worker node** – the *muscle*. It runs the application pods:
-  - `kubelet` – an agent that starts the pods the API server assigns to it and reports their health
-  - `kube-proxy` – network rules that make Services work
-  - a **container runtime** – containerd or CRI-O
+- **Pod:** the smallest unit, one or more containers sharing an IP.
+- **Deployment:** keeps a number of identical pods running and handles updates.
+- **Service:** a stable address that load balances over the pods (ClusterIP, NodePort or LoadBalancer).
+- **Ingress:** HTTP routing by host name or path.
+- **ConfigMap and Secret:** settings and passwords.
+- **Namespace:** a separate group of objects in the same cluster.
 
-### How to tell if a node is master or worker
-```bash
-kubectl get nodes                       # ROLES column: control-plane (or master on old versions) vs worker / <none>
-kubectl get nodes --show-labels         # label node-role.kubernetes.io/control-plane=
-kubectl describe node <name> | grep -i taint   # control-plane often has NoSchedule taint
-kubectl get pods -n kube-system -o wide # apiserver, etcd, scheduler, controller-manager pods run on the control-plane
-```
-In my minikube cluster, `minikube` shows **control-plane** and `minikube-m02` shows **worker**.
-A worker's ROLES column is `<none>` by default, because the role is only a label; I added it with
-`kubectl label node minikube-m02 node-role.kubernetes.io/worker=`.
+## Master and worker nodes, and how to identify them
 
-**Distributions:**
-- **kubeadm** – the "real" multi-node install
-- **minikube** – local learning cluster; what I used, with the docker driver
-- **k3s** – a lightweight single binary, good for edge or a VM
-- **MicroK8s** – Canonical's snap package
-- Managed clouds: EKS, AKS, GKE
+The **master (control plane)** manages the cluster and decides what runs where. Its components are:
 
-## Git (version control)
-Git keeps the full history of a project. Every clone is a complete copy, so it is *distributed*.
-GitHub and GitLab host the shared copy (the *remote*) and add pull requests, issues and CI.
+- `kube-apiserver`: the entry point that `kubectl` and all other parts talk to
+- `etcd`: the database that stores the state of the whole cluster
+- `kube-scheduler`: chooses a node for each new pod
+- `kube-controller-manager`: keeps the real state equal to the wanted state, for example the number of replicas
 
-Areas: **working directory** → `git add` → **staging area** → `git commit` → **local repo**
-→ `git push` → **remote**.
+A **worker node** runs the application pods. Its components are:
+
+- `kubelet`: starts the pods assigned to the node and reports their health
+- `kube-proxy`: network rules that make Services work
+- a container runtime such as containerd
+
+**How to identify them:**
 
 ```bash
-git init                         # start a repo        | git clone <url>       # copy an existing one
-git status                       # what changed        | git diff               # line-by-line changes
-git add <file> / git add .       # stage changes       | git commit -m "msg"    # save a snapshot
-git log --oneline --graph        # history             | git show <commit>      # one commit
-git branch / git switch -c feat  # list / create+switch branch
-git merge feat                   # bring a branch in   | git rebase main        # replay commits on top of main
-git remote add origin <url>      # link the remote     | git remote -v
-git push -u origin main          # upload commits      | git pull               # download + merge (= fetch + merge)
-git fetch                        # download without merging
-git stash / git stash pop        # put work aside temporarily
-git restore <file>               # discard local edits | git revert <commit>    # undo a commit with a new commit
-git reset --soft HEAD~1          # undo last commit, keep changes staged
-git tag v1.0                     # mark a release
+kubectl get nodes                                    # ROLES column: control-plane or worker
+kubectl get nodes --show-labels                      # label node-role.kubernetes.io/control-plane
+kubectl describe node <name> | grep -i taint         # the control plane usually has a NoSchedule taint
+kubectl get pods -n kube-system -o wide              # etcd, apiserver and scheduler run on the control plane
 ```
-`.gitignore` lists files that must never be committed (in this repo: private notes, `.vagrant/`, VM boxes).
 
-## RAID (Redundant Array of Independent Disks)
-RAID combines several disks into one so you get speed, safety, or both.
+In my cluster, `minikube` shows `control-plane` and `minikube-m02` shows `worker`. A worker shows `<none>` in the ROLES column by default, because the role is only a label, so I added it with `kubectl label node minikube-m02 node-role.kubernetes.io/worker=`.
 
-| Level | How | Min disks | Survives | Usable space | Notes |
-|---|---|---|---|---|---|
-| RAID 0 | Striping | 2 | **0** disk failures | 100% | Fastest, no protection |
-| RAID 1 | Mirroring | 2 | 1 disk | 50% | Simple, good for OS disks |
-| RAID 5 | Striping + 1 parity | 3 | 1 disk | (n-1)/n | Good balance; slow rebuild |
-| RAID 6 | Striping + 2 parity | 4 | 2 disks | (n-2)/n | Safer for big disks |
-| RAID 10 | Mirror, then stripe | 4 | 1 per mirror pair | 50% | Fast + safe, best for databases |
+## Common Git commands
 
-It can be done in hardware (a RAID controller card) or in software (Linux `mdadm`, ZFS, LVM).
-**RAID is not a backup:** if you delete a file or ransomware encrypts it, the change is mirrored instantly.
+| Command | What it does |
+|---|---|
+| `git init` / `git clone <url>` | Start a new repository / copy an existing one |
+| `git status` / `git diff` | See what changed |
+| `git add <file>` | Stage changes for the next commit |
+| `git commit -m "message"` | Save a snapshot |
+| `git log --oneline` | Show the history |
+| `git branch` / `git switch -c <name>` | List branches / create and switch to a branch |
+| `git merge <branch>` | Merge a branch into the current one |
+| `git remote -v` | Show the remote repository |
+| `git push` | Upload commits |
+| `git pull` | Download and merge changes (fetch + merge) |
+| `git fetch` | Download without merging |
+| `git stash` | Put changes aside for later |
+| `git revert <commit>` | Undo a commit with a new commit |
+
+Areas in Git: working directory, then `git add` to the staging area, then `git commit` to the local repository, then `git push` to the remote.
+
+## RAID
+
+RAID combines several disks into one, for speed, protection or both.
+
+| Level | How it works | Min. disks | Disk failures it survives | Usable space |
+|---|---|---|---|---|
+| RAID 0 | Striping | 2 | None | 100% |
+| RAID 1 | Mirroring | 2 | 1 | 50% |
+| RAID 5 | Striping with parity | 3 | 1 | (n-1)/n |
+| RAID 6 | Striping with double parity | 4 | 2 | (n-2)/n |
+| RAID 10 | Mirrors, then striping | 4 | 1 per mirror pair | 50% |
+
+RAID 10 is common for databases because it is fast and safe. RAID can be hardware (a RAID controller) or software (`mdadm` on Linux). RAID is not a backup: if a file is deleted or encrypted by ransomware, the change is copied to all disks right away.
 
 ## DevOps
-DevOps is a way of working where **development** and **operations** share responsibility for software
-all the way from code to production. The aim is to release small changes often, safely, and automatically.
 
-Core practices:
-- version control for everything
-- **CI** – build and test on every push
-- **CD** – automatic delivery/deployment
-- **Infrastructure as Code** – Vagrantfile, Terraform, Ansible
-- containers and orchestration
-- monitoring and logging, with feedback loops
+DevOps is a way of working where the development and operations teams share responsibility for the software, from writing the code to running it in production. The goal is to release small changes often, safely and automatically.
 
-The loop: **plan → code → build → test → release → deploy → operate → monitor** → back to plan.
+The main practices are version control, continuous integration (build and test on every push), continuous delivery, infrastructure as code (Vagrant, Terraform, Ansible), containers, and monitoring. The cycle is plan, code, build, test, release, deploy, operate and monitor, and then back to plan.
 
-Typical tools:
-- Git/GitHub/GitLab; Jenkins / GitLab CI / GitHub Actions
-- Maven; Docker; Kubernetes
-- Ansible/Puppet/Terraform
-- Prometheus + Grafana, ELK
+Common tools: Git, Jenkins, GitLab CI or GitHub Actions, Maven, Docker, Kubernetes, Ansible, Terraform, and Prometheus with Grafana.
 
 ## High Availability (HA) and Disaster Recovery (DR)
-- **HA** – keep the service running when *one part* fails, with little or no downtime, inside one site.
-  Done with **redundancy** (no single point of failure) and **automatic failover**.
-  Measured as uptime, e.g. 99.99% ≈ 52 minutes of downtime a year.
-- **DR** – bring the service back after a *disaster* that takes out a whole site (fire, flood, region
-  outage, ransomware), usually at a second site. Measured with:
-  - **RPO** (Recovery Point Objective) – how much data you can afford to lose (e.g. the last 5 minutes)
-  - **RTO** (Recovery Time Objective) – how long until the service is back (e.g. 1 hour)
-- **Backups** sit under both: the 3-2-1 rule is 3 copies, on 2 kinds of media, 1 off-site.
 
-Technologies:
-| Product | HA (same site) | DR (other site) |
+**HA** keeps the service running when one part fails, with little or no downtime. It works through redundancy (no single point of failure) and automatic failover, and it is measured as uptime: 99.99% is about 52 minutes of downtime per year.
+
+**DR** brings the service back after a disaster that takes down a whole site, usually by moving to a second site. It is measured with two numbers:
+
+- RPO (Recovery Point Objective): how much data you can afford to lose
+- RTO (Recovery Time Objective): how long it takes to get the service back
+
+Backups support both. The 3-2-1 rule means 3 copies, on 2 types of media, with 1 copy off site.
+
+| Product | HA | DR |
 |---|---|---|
-| **Oracle** | **RAC** – several servers share one database, so if one dies the others keep serving | **Data Guard** – a standby DB in another site kept in sync with redo logs (Active Data Guard = readable standby), plus **RMAN** backups, GoldenGate |
-| **PostgreSQL** | Streaming replication + automatic failover with **Patroni** (with etcd) or repmgr; **PgBouncer** / HAProxy in front | Async replica in another region, **pgBackRest** / Barman backups with WAL archiving for point-in-time recovery |
-| **Tomcat** | Several Tomcats behind a load balancer (Nginx / HAProxy / Apache `mod_jk`), **session replication** (DeltaManager cluster) or sticky sessions / sessions in Redis | Same stack deployed at a second site, DNS / global load balancer failover |
-| General | Keepalived (VRRP floating IP), Pacemaker/Corosync, Kubernetes replicas, cloud availability zones | Storage replication, VM replication (VMware SRM), cloud multi-region |
+| Oracle | RAC: several servers share one database, so if one fails the others keep working | Data Guard: a standby database at another site, kept in sync with the redo logs. Also RMAN backups and GoldenGate |
+| PostgreSQL | Streaming replication with automatic failover (Patroni or repmgr), with PgBouncer or HAProxy in front | A replica at another site, and pgBackRest or Barman backups with WAL archiving for point-in-time recovery |
+| Tomcat | Several Tomcat servers behind a load balancer (Nginx, HAProxy or Apache mod_jk), with session replication or sticky sessions | The same setup at a second site, with DNS or global load balancer failover |
+| General | Keepalived (floating IP), Pacemaker, Kubernetes replicas | Storage and VM replication, multiple cloud regions |
 
 ## Cloud computing
-Renting computing resources (servers, storage, databases, software) over the internet. You pay for what
-you use and can scale up or down in minutes instead of buying hardware.
 
-**Service models** – who manages what:
-| | You manage | Provider manages | Examples |
+Cloud computing means renting servers, storage, databases and software over the internet, paying for what you use, and scaling up or down in minutes.
+
+| Model | I manage | The provider manages | Examples |
 |---|---|---|---|
-| **IaaS** – Infrastructure | OS, runtime, app, data | Hardware, network, virtualization | AWS EC2, Azure VMs, Google Compute Engine |
-| **PaaS** – Platform | Your app + data | Everything up to and including the runtime | AWS Elastic Beanstalk, Azure App Service, Heroku, Google App Engine, managed DBs (RDS) |
-| **SaaS** – Software | Just use it (your data, users) | Everything | Gmail, Microsoft 365, Salesforce, Zoom |
+| IaaS (Infrastructure as a Service) | OS, runtime, application and data | Hardware, network and virtualization | AWS EC2, Azure Virtual Machines, Google Compute Engine |
+| PaaS (Platform as a Service) | Application and data | Everything up to the runtime | AWS Elastic Beanstalk, Azure App Service, Heroku, AWS RDS |
+| SaaS (Software as a Service) | Only my data and users | Everything | Gmail, Microsoft 365, Salesforce, Zoom |
 
-The pizza analogy: IaaS = you get the kitchen, PaaS = pizza delivered and you set the table, SaaS =
-eat at the restaurant.
+**Deployment types:** public cloud (shared provider), private cloud (one organization, for example OpenStack or VMware in its own data center), hybrid (both connected), and multi-cloud (more than one public provider). Banks and payment companies often use private or hybrid clouds because of data residency rules.
 
-**Deployment types:**
-- **public** cloud – shared provider
-- **private** cloud – one organization, e.g. OpenStack/VMware in your own datacenter
-- **hybrid** – both, connected
-- **multi-cloud** – several public providers
+**Vendors:** AWS, Microsoft Azure, Google Cloud, Oracle Cloud (OCI), IBM Cloud, Alibaba Cloud, and smaller ones such as DigitalOcean.
 
-Banks and payment companies often use private/hybrid clouds because of
-data-residency rules.
+## DNS and load balancers
 
-**Vendors:**
-- **AWS** – the biggest
-- **Microsoft Azure**
-- **Google Cloud**
-- **Oracle Cloud (OCI)**
-- **IBM Cloud**, **Alibaba Cloud**
-- smaller ones like DigitalOcean
+**DNS** translates names into IP addresses. When you open a name, the computer first checks its cache and the hosts file (this is how `ps-app.local` worked in the Tomcat part). Then it asks a recursive resolver (for example 8.8.8.8), which asks a root server, then the TLD server (`.com`), then the domain's authoritative server. The answer is cached for the record's TTL.
 
-## DNS
-The **Domain Name System** is the internet's phone book: it turns names (`ps-app.local`, `google.com`)
-into IP addresses.
+Common record types: `A` (IPv4), `AAAA` (IPv6), `CNAME` (alias), `MX` (mail), `TXT`, `NS` and `PTR` (reverse lookup). Useful tools are `nslookup` and `dig`.
 
-**How a lookup works:**
-1. Your PC first checks its own cache and the `hosts` file. That is how `ps-app.local` works in Part 3.
-2. Then it asks a **recursive resolver** (your ISP, 8.8.8.8, 1.1.1.1).
-3. The resolver asks a **root server** → the **TLD server** (`.com`) → the domain's **authoritative**
-   server, which holds the answer.
-4. The answer is cached for its **TTL**.
+**A load balancer** sits in front of several servers and spreads the requests between them. If a server fails its health check, it stops receiving traffic, which gives both scaling and HA.
 
-**Record types:**
-- `A` (IPv4), `AAAA` (IPv6)
-- `CNAME` (alias to another name)
-- `MX` (mail server)
-- `TXT` (verification, SPF)
-- `NS` (which servers are authoritative)
-- `PTR` (reverse: IP → name)
-- `SOA`
+- **Layer 4** works on IP and port only, so it is very fast (HAProxy in TCP mode, AWS NLB).
+- **Layer 7** works on HTTP: it can route by URL or host, terminate SSL and use sticky sessions (Nginx, HAProxy in HTTP mode, AWS ALB, F5).
+- **Algorithms:** round robin, weighted round robin, least connections and IP hash.
 
-Tools: `nslookup`, `dig`, `host`. DNS can also spread load (several A records) or fail over (health-checked DNS).
-
-## Load balancers
-A load balancer sits in front of several servers and spreads requests over them. If a server fails a
-**health check**, it gets no more traffic. This gives scaling and HA. (In my Kubernetes test, the
-Service split 6 requests 3/3 over two pods.)
-- **Layer 4** (TCP/UDP) – routes by IP and port only; very fast. E.g. HAProxy in TCP mode, AWS NLB, LVS.
-- **Layer 7** (HTTP) – looks at URL, host and headers/cookies; can do SSL termination, path routing and
-  sticky sessions. E.g. Nginx, HAProxy HTTP mode, AWS ALB, F5.
-- **Algorithms:** round robin, weighted round robin, least connections, IP hash (same client → same
-  server), least response time.
-- Hardware (F5 BIG-IP, Citrix ADC), software (HAProxy, Nginx, Envoy) or cloud (AWS ELB, Azure LB).
-  The load balancer itself is made redundant with an active/passive pair and a floating IP (Keepalived/VRRP).
+The load balancer itself is usually set up as an active/passive pair with a floating IP (Keepalived). In my Kubernetes test, the Service did the same job by spreading the requests over the two pods.

@@ -1,74 +1,48 @@
-# SQL – theory notes
+# SQL notes
 
-## SQL vs PL/SQL
-- **SQL** is the language for talking to a relational database. It says *what* data you want
-  (`SELECT ... WHERE ...`) and the database decides how to get it. One statement at a time.
-- **PL/SQL** is Oracle's programming language wrapped around SQL. It adds variables, `IF`, loops,
-  exceptions, and lets you save code in the database as **functions**, **procedures**, **packages**
-  and **triggers**. Good for logic that would otherwise mean many round trips from an application.
+Notes for the SQL reading questions. The answers to Q1 to Q6 are in `sql/ps_oracle.sql`.
 
-## Kinds of SQL statements
-| Group | Meaning | Examples |
+## SQL, PL/SQL and the types of statements
+
+SQL is the language used to work with a relational database. You say what data you want, and the database decides how to get it. PL/SQL is Oracle's programming language around SQL. It adds variables, IF, loops and exception handling, and lets you store code in the database as functions, procedures, packages and triggers.
+
+| Type | Purpose | Examples |
 |---|---|---|
-| **DDL** – Data Definition | Create / change / remove objects. Auto-commits in Oracle. | `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `RENAME` |
-| **DML** – Data Manipulation | Work with the rows inside tables. | `INSERT`, `UPDATE`, `DELETE`, `MERGE` (and `SELECT`, sometimes called DQL) |
-| **DCL** – Data Control | Who may do what. | `GRANT`, `REVOKE` |
-| **TCL** – Transaction Control | Finish or undo DML. | `COMMIT`, `ROLLBACK`, `SAVEPOINT` |
+| DDL (Data Definition) | Create, change or remove objects | `CREATE`, `ALTER`, `DROP`, `TRUNCATE` |
+| DML (Data Manipulation) | Work with the rows | `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `SELECT` |
+| DCL (Data Control) | Give or remove permissions | `GRANT`, `REVOKE` |
+| TCL (Transaction Control) | Save or undo DML changes | `COMMIT`, `ROLLBACK`, `SAVEPOINT` |
 
-`DELETE` vs `TRUNCATE`: `DELETE` is DML, can have a `WHERE`, and can be rolled back. `TRUNCATE` is DDL,
-removes all rows at once, is very fast, and cannot be rolled back.
+`DELETE` is DML: it can have a WHERE and can be rolled back. `TRUNCATE` is DDL: it removes all rows at once and cannot be rolled back.
 
-## JOIN types
-- **INNER JOIN** – only rows that match in both tables.
-- **LEFT (OUTER) JOIN** – all rows from the left table, plus matches from the right (NULL if none).
-  Used in Q2 so the president (no manager) and an employee with no university still show up.
-- **RIGHT (OUTER) JOIN** – the mirror of LEFT.
-- **FULL (OUTER) JOIN** – all rows from both sides, matched where possible.
-- **CROSS JOIN** – every row × every row (Cartesian product).
-- **SELF JOIN** – a table joined to itself, e.g. employee → manager in the same table (Q2).
-- **NATURAL JOIN / USING** – join on columns that have the same name (handy, but fragile).
-- Also: equi-join (`=`) vs non-equi-join (e.g. `BETWEEN` on salary grades).
+## Types of JOINs
 
-## RDBMS vs NoSQL
-- **RDBMS** (Oracle, PostgreSQL, MySQL, SQL Server): data lives in tables with a fixed schema, tables are
-  linked by keys, you query with SQL, and you get **ACID** transactions (Atomic, Consistent, Isolated,
-  Durable). Strong for money and records where correctness matters. Usually scales *up* (a bigger server).
-- **NoSQL** ("not only SQL"): flexible or no schema, built to scale *out* over many servers. Main types:
-  - document (MongoDB)
-  - key-value (Redis)
-  - wide-column (Cassandra)
-  - graph (Neo4j)
+- **INNER JOIN:** only rows that match in both tables.
+- **LEFT OUTER JOIN:** all rows from the left table, plus the matching rows from the right (NULL when there is no match).
+- **RIGHT OUTER JOIN:** the opposite of LEFT.
+- **FULL OUTER JOIN:** all rows from both tables.
+- **CROSS JOIN:** every row combined with every row.
+- **SELF JOIN:** a table joined to itself. I used it in Q2 to get each employee's manager.
+- **NATURAL JOIN / USING:** joins on columns with the same name.
 
-  Often trades strict consistency for speed and availability ("eventual consistency"). Good for big,
-  fast-changing or unstructured data such as caches, sessions, logs and catalogs.
+## RDBMS and NoSQL, functions, constraints and indexes
 
-## Aggregate functions
-Work on a group of rows and return one value: `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`
-(+ `LISTAGG`, `STDDEV`). Used with `GROUP BY`. `WHERE` filters rows **before** grouping; `HAVING`
-filters groups **after** (Q3 uses both). `COUNT(*)` counts rows; `COUNT(col)` skips NULLs.
+**RDBMS** (Oracle, PostgreSQL, MySQL, SQL Server) stores data in tables with a fixed structure, linked by keys, and supports ACID transactions (Atomic, Consistent, Isolated, Durable). It fits banking and payment data, where correctness matters most.
 
-## Date functions (Oracle)
-`SYSDATE`, `SYSTIMESTAMP`, `ADD_MONTHS(d, n)`, `MONTHS_BETWEEN(d1, d2)`, `LAST_DAY(d)`,
-`NEXT_DAY(d, 'FRIDAY')`, `TRUNC(d)`, `EXTRACT(YEAR FROM d)`, `TO_CHAR(d, 'DD/MM/YYYY')`,
-`TO_DATE('09/09/1987', 'DD/MM/YYYY')`. Subtracting two dates gives a number of days.
+**NoSQL** databases have a flexible structure and are built to scale over many servers. The main types are document (MongoDB), key-value (Redis), wide-column (Cassandra) and graph (Neo4j). They often accept "eventual consistency" in exchange for speed, so they fit things like caches, sessions and logs.
 
-## String functions
-`UPPER`, `LOWER`, `INITCAP`, `LENGTH`, `SUBSTR`, `INSTR`, `CONCAT` / `||`, `TRIM`, `LTRIM`, `RTRIM`,
-`LPAD`, `RPAD`, `REPLACE`, `REGEXP_LIKE`, `REGEXP_REPLACE`. Null helpers: `NVL`, `NVL2`, `COALESCE`,
-`NULLIF`, plus `DECODE` and `CASE`.
+**Aggregation functions:** `COUNT`, `SUM`, `AVG`, `MIN`, `MAX`, used with `GROUP BY`. `WHERE` filters rows before grouping, and `HAVING` filters the groups after (Q3 uses both).
 
-## Constraints
-Rules the database enforces so bad data can't get in:
-- **PRIMARY KEY** – unique and not null; identifies a row (one per table).
-- **NOT NULL** – the column must have a value.
-- **UNIQUE** – no duplicates (NULLs allowed).
-- **FOREIGN KEY** – the value must exist in the parent table (e.g. `DEPT_ID` → `MyDepartment`).
-- **CHECK** – a condition that must be true (e.g. `SALARY > 0`).
+**Date functions (Oracle):** `SYSDATE`, `ADD_MONTHS`, `MONTHS_BETWEEN`, `LAST_DAY`, `NEXT_DAY`, `TRUNC`, `EXTRACT(YEAR FROM d)`, `TO_CHAR(d, 'DD/MM/YYYY')`, `TO_DATE`.
 
-## Indexes
-An index is a sorted structure (normally a B-tree) that lets the DB find rows without reading the whole
-table – like the index at the back of a book.
-- They speed up `WHERE` and `JOIN`, but slow down `INSERT`/`UPDATE`/`DELETE` a little and use disk space.
-- PK and UNIQUE constraints create an index automatically. Foreign keys do **not**, so in the script
-  I added indexes on `DEPT_ID`, `MANAGER_ID` and `JOB_ID`.
-- Other types: bitmap (low-cardinality columns), function-based (`UPPER(name)`), composite (several columns).
+**String functions:** `UPPER`, `LOWER`, `INITCAP`, `LENGTH`, `SUBSTR`, `INSTR`, `||` or `CONCAT`, `TRIM`, `LPAD`, `RPAD`, `REPLACE`, and for NULLs `NVL`, `NVL2`, `COALESCE`.
+
+**Constraints** stop bad data from getting in:
+
+- PRIMARY KEY: unique and not null, one per table
+- NOT NULL: the column must have a value
+- UNIQUE: no duplicates
+- FOREIGN KEY: the value must exist in the parent table
+- CHECK: a condition that must be true, for example `SALARY > 0`
+
+**Indexes** are sorted structures (usually B-tree) that let the database find rows without reading the whole table. They make SELECT and JOIN faster but make INSERT and UPDATE a bit slower. Oracle creates an index for every primary key and unique constraint, but not for foreign keys, so I added indexes on `DEPT_ID`, `MANAGER_ID` and `JOB_ID`.
